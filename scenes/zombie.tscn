@@ -1,0 +1,50 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/zombie.gd" id="1_z"]
+
+[sub_resource type="CapsuleShape3D" id="zcaps"]
+radius = 0.4
+height = 1.8
+
+[sub_resource type="BoxMesh" id="zbody"]
+size = Vector3(0.7, 0.9, 0.4)
+
+[sub_resource type="BoxMesh" id="zhead"]
+size = Vector3(0.35, 0.35, 0.35)
+
+[sub_resource type="StandardMaterial3D" id="zbody_mat"]
+albedo_color = Color(0.8, 0.2, 0.2, 1)
+emission_enabled = true
+emission = Color(1.0, 0.1, 0.1, 1)
+emission_energy_multiplier = 0.8
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="zhead_mat"]
+albedo_color = Color(0.9, 0.7, 0.5, 1)
+emission_enabled = true
+emission = Color(0.9, 0.7, 0.5, 1)
+emission_energy_multiplier = 0.5
+roughness = 0.85
+
+[node name="Zombie" type="CharacterBody3D"]
+script = ExtResource("1_z")
+
+[node name="Collision" type="CollisionShape3D" parent="."]
+position = Vector3(0, 0.9, 0)
+shape = SubResource("zcaps")
+
+[node name="Body" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.9, 0)
+mesh = SubResource("zbody")
+material_override = SubResource("zbody_mat")
+
+[node name="Head" type="MeshInstance3D" parent="."]
+position = Vector3(0, 1.55, 0)
+mesh = SubResource("zhead")
+material_override = SubResource("zhead_mat")
+
+[node name="AttackTimer" type="Timer" parent="."]
+one_shot = true
+wait_time = 1.0
+
+[connection signal="timeout" from="AttackTimer" to="." method="_on_attack_timer_timeout"]

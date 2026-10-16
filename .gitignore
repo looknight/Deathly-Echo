@@ -1,0 +1,7 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+.dsh-acl-recovery/
+.appdata_test/
+test_*.gd
+test_*.tscn

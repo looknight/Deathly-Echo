@@ -1,0 +1,171 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/hud.gd" id="1_h"]
+[ext_resource type="Script" path="res://scripts/minimap.gd" id="2_m"]
+
+[sub_resource type="StyleBoxFlat" id="panel"]
+bg_color = Color(0, 0, 0, 0.55)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[node name="HUD" type="CanvasLayer"]
+script = ExtResource("1_h")
+
+[node name="UI" type="Control" parent="."]
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="Crosshair" type="Label" parent="UI"]
+anchor_left = 0.5
+anchor_top = 0.5
+offset_left = -10
+offset_top = -15
+offset_right = 10
+offset_bottom = 15
+theme_override_font_sizes/font_size = 24
+theme_override_colors/font_color = Color(1, 1, 1, 0.85)
+text = "+"
+horizontal_alignment = 1
+
+[node name="TopBar" type="PanelContainer" parent="UI"]
+anchor_left = 0.5
+offset_left = -220
+offset_top = 16
+offset_right = 220
+offset_bottom = 50
+theme_override_styles/panel = SubResource("panel")
+
+[node name="HB" type="HBoxContainer" parent="UI/TopBar"]
+alignment = 1
+theme_override_constants/separation = 30
+
+[node name="WaveTxt" type="Label" parent="UI/TopBar/HB"]
+theme_override_colors/font_color = Color(0.9, 0.85, 0.75, 1)
+text = "第 1/10 波"
+
+[node name="MapTxt" type="Label" parent="UI/TopBar/HB"]
+theme_override_colors/font_color = Color(0.7, 0.8, 0.9, 1)
+text = "街道"
+
+[node name="KillTxt" type="Label" parent="UI/TopBar/HB"]
+theme_override_colors/font_color = Color(0.9, 0.8, 0.8, 1)
+text = "击杀 0"
+
+[node name="HPPanel" type="PanelContainer" parent="UI"]
+anchor_left = 0
+anchor_top = 1
+anchor_bottom = 1
+offset_left = 24
+offset_top = -90
+offset_right = 320
+offset_bottom = -24
+theme_override_styles/panel = SubResource("panel")
+
+[node name="VB" type="VBoxContainer" parent="UI/HPPanel"]
+theme_override_constants/separation = 4
+
+[node name="HPTxt" type="Label" parent="UI/HPPanel/VB"]
+theme_override_colors/font_color = Color(0.9, 0.85, 0.8, 1)
+text = "100 / 100"
+
+[node name="HPBar" type="ProgressBar" parent="UI/HPPanel/VB"]
+custom_minimum_size = Vector2(280, 16)
+max_value = 100.0
+value = 100.0
+show_percentage = false
+
+[node name="AmmoPanel" type="PanelContainer" parent="UI"]
+anchor_left = 1
+anchor_top = 1
+anchor_right = 1
+anchor_bottom = 1
+offset_left = -240
+offset_top = -110
+offset_right = -24
+offset_bottom = -24
+theme_override_styles/panel = SubResource("panel")
+
+[node name="AB" type="VBoxContainer" parent="UI/AmmoPanel"]
+alignment = 2
+
+[node name="WeaponName" type="Label" parent="UI/AmmoPanel/AB"]
+theme_override_colors/font_color = Color(0.7, 0.7, 0.65, 1)
+text = "手枪"
+horizontal_alignment = 2
+
+[node name="AmmoRow" type="HBoxContainer" parent="UI/AmmoPanel/AB"]
+alignment = 2
+
+[node name="AmmoCur" type="Label" parent="UI/AmmoPanel/AB/AmmoRow"]
+theme_override_font_sizes/font_size = 36
+theme_override_colors/font_color = Color(0.95, 0.9, 0.8, 1)
+text = "12"
+
+[node name="AmmoRes" type="Label" parent="UI/AmmoPanel/AB/AmmoRow"]
+theme_override_font_sizes/font_size = 18
+theme_override_colors/font_color = Color(0.6, 0.55, 0.5, 1)
+text = "/ 48"
+
+[node name="GrenadeTxt" type="Label" parent="UI/AmmoPanel/AB"]
+theme_override_colors/font_color = Color(0.8, 0.75, 0.5, 1)
+text = "手雷: 3"
+horizontal_alignment = 2
+
+[node name="CenterMsg" type="Label" parent="UI"]
+anchor_left = 0.5
+anchor_top = 0.25
+offset_left = -350
+offset_top = 0
+offset_right = 350
+offset_bottom = 60
+theme_override_font_sizes/font_size = 32
+theme_override_colors/font_color = Color(1, 0.9, 0.7, 1)
+horizontal_alignment = 1
+vertical_alignment = 1
+text = ""
+
+[node name="SkillCd" type="Label" parent="UI"]
+anchor_left = 0.5
+anchor_top = 1
+offset_left = -100
+offset_top = -60
+offset_right = 100
+offset_bottom = -30
+theme_override_colors/font_color = Color(0.9, 0.8, 0.3, 1)
+theme_override_font_sizes/font_size = 16
+horizontal_alignment = 1
+text = "F 技能: 就绪"
+
+[node name="BossPanel" type="PanelContainer" parent="UI"]
+anchor_left = 0.5
+anchor_right = 1
+anchor_top = 0
+offset_left = -300
+offset_top = 70
+offset_right = 300
+offset_bottom = 110
+theme_override_styles/panel = SubResource("panel")
+
+[node name="BV" type="VBoxContainer" parent="UI/BossPanel"]
+
+[node name="BossName" type="Label" parent="UI/BossPanel/BV"]
+theme_override_colors/font_color = Color(1, 0.4, 0.3, 1)
+text = "BOSS"
+horizontal_alignment = 1
+
+[node name="BossBar" type="ProgressBar" parent="UI/BossPanel/BV"]
+custom_minimum_size = Vector2(600, 14)
+max_value = 800.0
+value = 800.0
+show_percentage = false
+
+[node name="Minimap" type="Control" parent="UI"]
+anchor_left = 1
+anchor_top = 0
+offset_left = -180
+offset_top = 16
+offset_right = -16
+offset_bottom = 180
+script = ExtResource("2_m")

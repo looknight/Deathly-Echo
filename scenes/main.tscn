@@ -1,0 +1,34 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/player.tscn" id="1_p"]
+[ext_resource type="PackedScene" path="res://scenes/zombie.tscn" id="2_z"]
+[ext_resource type="PackedScene" path="res://scenes/hud.tscn" id="3_h"]
+[ext_resource type="Script" path="res://scripts/wave_manager.gd" id="4_w"]
+
+[sub_resource type="Environment" id="env"]
+background_color = Color(0.15, 0.15, 0.18, 1)
+ambient_light_source = 2
+ambient_light_energy = 1.2
+tonemap_mode = 2
+fog_enabled = false
+
+[node name="Main" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("env")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866, 0, -0.5, 0, 1, 0, 0.5, 0, 0.866, 5, 10, 5)
+light_energy = 1.5
+shadow_enabled = false
+
+[node name="Player" parent="." instance=ExtResource("1_p")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 20)
+
+[node name="HUD" parent="." instance=ExtResource("3_h")]
+
+[node name="WaveManager" type="Node3D" parent="."]
+script = ExtResource("4_w")
+zombie_scene = ExtResource("2_z")
+player = NodePath("../Player")
+hud = NodePath("../HUD")
