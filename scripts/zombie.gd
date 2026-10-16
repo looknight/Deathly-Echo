@@ -17,12 +17,24 @@ var boss_state: int = 0  # 0=正常 1=冲刺 2=召唤 3=咆哮
 var boss_skill_cd: float = 0.0
 var stun_timer: float = 0.0  # 眩晕倒计时
 
+# ===== charger（冲刺型）参数：写死，不暴露为导出项 =====
+const CHARGER_NORMAL_SPEED: float = 2.5    # 常态移动速度
+const CHARGER_CHARGE_SPEED: float = 6.5    # 冲刺速度
+const CHARGER_TRIGGER_DIST: float = 10.0   # 进入该距离触发冲刺，触发后不再退回
+const CHARGER_BLAST_DIST: float = 1.8      # 撞到玩家该距离内自爆
+const CHARGER_HARD_RADIUS: float = 4.0     # 硬半径：>4m 完全无伤
+const CHARGER_MAX_DMG: float = 80.0        # 中心伤害
+const CHARGER_DMG_FALLOFF: float = 15.0    # 每米衰减：80 - d*15 → 4m 处 20
+var charging: bool = false                 # charger 是否已进入冲刺状态
+var charger_glow_energy: float = 0.0       # 冲刺时记录的基础光晕强度，用于翻倍
+
 var arm_l: Node3D
 var arm_r: Node3D
 var leg_l: Node3D
 var leg_r: Node3D
 var torso: MeshInstance3D
 var head_node: Node3D
+var glow: OmniLight3D  # 身体自带的红色光晕（charger 冲刺时复用为跟随光晕）
 var is_female: bool = false
 
 func _ready() -> void:
@@ -119,12 +131,35 @@ func _build_body() -> void:
 	leg_r.add_child(leg_r_mesh)
 	add_child(leg_r)
 	# 红眼发光
-	var glow := OmniLight3D.new()
+	glow = OmniLight3D.new()
 	glow.light_color = Color(1, 0.1, 0.1)
 	glow.light_energy = 0.5
 	glow.omni_range = 1.5
 	glow.position = Vector3(0, 1.75, 0)
 	add_child(glow)
+
+func _apply_body_visual(body_color: Color, eye_color: Color, body_emit: float, eye_emit: float, glow_energy: float, glow_range: float) -> void:
+	# 通用身体配色：亮色身体 + 高自发光，眼睛单列；头发/裤子等无发光部件跳过
+	for child in get_children():
+		if child is MeshInstance3D and child.material_override is StandardMaterial3D:
+			var mat: StandardMaterial3D = child.material_override
+			if not mat.emission_enabled:
+				continue  # 头发/裤子等无发光部件不动
+			# 眼睛：原发光色为红色，单独换色
+			var is_eye: bool = mat.emission.r > 0.8 and mat.emission.g < 0.4
+			mat.albedo_color = eye_color if is_eye else body_color
+			mat.emission = eye_color if is_eye else body_color
+			mat.emission_energy_multiplier = eye_emit if is_eye else body_emit
+	# 光晕同步换色并加强（冲刺时在此基础翻倍）
+	if glow:
+		glow.light_color = body_color
+		glow.light_energy = glow_energy
+		glow.omni_range = glow_range
+		charger_glow_energy = glow_energy  # 记录基础值，冲刺翻倍时用
+
+func _apply_charger_visual() -> void:
+	# charger：亮橙身体 + 高自发光，眼睛白热
+	_apply_body_visual(Color(1.0, 0.45, 0.05), Color(1.0, 0.9, 0.7), 2.0, 4.0, 1.2, 3.0)
 
 func _configure_type() -> void:
 	match zombie_type:
@@ -135,7 +170,14 @@ func _configure_type() -> void:
 			scale = Vector3(1.3,1.3,1.3)
 		"exploder":
 			speed = 2.5; max_hp = 40.0; damage = 50.0
-			# 黄色身体标记
+			# 黄色身体标记（与 charger 的亮橙区分）
+			_apply_body_visual(Color(1.0, 0.85, 0.1), Color(1.0, 0.95, 0.6), 1.4, 3.0, 0.9, 2.5)
+		"charger":
+			# 冲刺型：常态 2.5，冲刺 6.5，血量 55，撞击自爆
+			# damage=0 是有意设计：charger 不参与近战抓挠，全部伤害只由 _charger_explode() 的自爆给出，
+			# 避免「撞击自爆」与「抓挠」在同一距离内叠加一次额外伤害
+			speed = CHARGER_NORMAL_SPEED; max_hp = 55.0; damage = 0.0
+			_apply_charger_visual()
 		"boss":
 			speed = 1.8; max_hp = 800.0; damage = 35.0
 			scale = Vector3(1.8,1.8,1.8)
@@ -161,6 +203,17 @@ func _physics_process(delta: float) -> void:
 	if boss_skill_cd > 0:
 		boss_skill_cd -= delta
 
+	# charger：进入10m触发冲刺，触发后不退回（只置位、不重置），持续追踪玩家实时位置
+	if zombie_type == "charger":
+		if not charging and dist <= CHARGER_TRIGGER_DIST:
+			charging = true
+			_charger_set_sprint_visual(true)
+		# 撞到玩家 1.8m 内自爆（优先于任何近战逻辑）
+		if not exploded and dist <= CHARGER_BLAST_DIST:
+			# 把判定帧的 dist 传入，保证判定与伤害用同一个距离（move_and_slide 会在同帧稍后推进位置）
+			_charger_explode(dist)
+			return
+
 	if dist > attack_range:
 		var dir := to_player.normalized()
 		var move_speed: float = speed
@@ -168,10 +221,13 @@ func _physics_process(delta: float) -> void:
 		if zombie_type == "boss" and boss_state == 1:
 			move_speed = speed * 4.0
 			boss_state = 0
+		# charger冲刺：每帧用最新玩家位置重算方向，所以是追踪而非直线
+		if zombie_type == "charger" and charging:
+			move_speed = CHARGER_CHARGE_SPEED
 		velocity.x = dir.x * move_speed
 		velocity.z = dir.z * move_speed
 		look_at(Vector3(player.global_position.x, global_position.y, player.global_position.z), Vector3.UP)
-		walk_time += delta * 7.0
+		walk_time += delta * (11.0 if zombie_type == "charger" and charging else 7.0)
 		# 走路动画：腿大步迈，臂前伸摆动，身体前倾
 		var swing := sin(walk_time)
 		leg_l.rotation.x = -swing * 0.6
@@ -179,7 +235,7 @@ func _physics_process(delta: float) -> void:
 		arm_l.rotation.x = 1.2 + swing * 0.2  # 手臂前伸够人
 		arm_r.rotation.x = 1.2 - swing * 0.2
 		head_node.rotation.x = -0.15  # 头微低
-		torso.rotation.x = 0.1  # 身体前倾
+		torso.rotation.x = 0.1 if zombie_type != "charger" or not charging else 0.35  # 冲刺时更前倾
 		torso.position.y = 1.25 + abs(sin(walk_time)) * 0.03
 	else:
 		velocity.x = 0; velocity.z = 0
@@ -260,6 +316,60 @@ func _explode() -> void:
 	get_parent().add_child(flash)
 	var tw := create_tween()
 	tw.tween_property(flash, "light_energy", 0.0, 0.3)
+	tw.tween_callback(flash.queue_free)
+	GameState.kills += 1
+	queue_free()
+
+func _charger_set_sprint_visual(on: bool) -> void:
+	# 冲刺视觉：自发光翻倍 + 光晕跟随
+	var mul: float = 2.0 if on else 1.0
+	for child in get_children():
+		if child is MeshInstance3D and child.material_override is StandardMaterial3D:
+			var mat: StandardMaterial3D = child.material_override
+			if mat.emission_enabled:
+				var base: float = 4.0 if (mat.emission.r > 0.8 and mat.emission.g > 0.5) else 2.0
+				mat.emission_energy_multiplier = base * mul
+	if glow:
+		glow.light_energy = charger_glow_energy * mul
+		glow.omni_range = 5.0 if on else 3.0
+
+func _charger_explode(trigger_dist: float = -1.0) -> void:
+	exploded = true
+	# 谁死谁清理：若被猎手标记，自爆时清除
+	if player and is_instance_valid(player) and player.get("marked_zombie") == self:
+		player.set("marked_zombie", null)
+	# 只炸玩家：以自身为球心做 4m 硬半径球体相交检测，>4m 一律无伤
+	var space: PhysicsDirectSpaceState3D = get_world_3d().direct_space_state
+	var shape: SphereShape3D = SphereShape3D.new()
+	shape.radius = CHARGER_HARD_RADIUS
+	var params: PhysicsShapeQueryParameters3D = PhysicsShapeQueryParameters3D.new()
+	params.shape = shape
+	params.transform = Transform3D(Basis(), global_position)
+	params.collide_with_bodies = true
+	params.collide_with_areas = false
+	params.exclude = [get_rid()]
+	var hits: Array[Dictionary] = space.intersect_shape(params, 32)
+	var dist_to_player: float = global_position.distance_to(player.global_position) if (player and is_instance_valid(player)) else 999.0
+	var in_radius: bool = false
+	for h in hits:
+		var body: Object = h.get("collider")
+		if body and body.is_in_group("player"):
+			in_radius = true
+			break
+	# 伤害距离：撞击路径用触发帧的 dist（与 1.8m 判定同源）；手动调用时退回当前实际距离
+	var dmg_dist: float = trigger_dist if trigger_dist >= 0.0 else dist_to_player
+	# 伤害 80→20 线性衰减：80 - d*15（d≤4）
+	if in_radius and dmg_dist <= CHARGER_HARD_RADIUS and player.has_method("take_damage"):
+		var dmg: float = max(CHARGER_MAX_DMG - dmg_dist * CHARGER_DMG_FALLOFF, 20.0)
+		player.take_damage(dmg)
+	var flash := OmniLight3D.new()
+	flash.light_color = Color(1.0, 0.5, 0.1)
+	flash.light_energy = 8.0
+	flash.omni_range = 8.0
+	flash.position = global_position
+	get_parent().add_child(flash)
+	var tw := create_tween()
+	tw.tween_property(flash, "light_energy", 0.0, 0.35)
 	tw.tween_callback(flash.queue_free)
 	GameState.kills += 1
 	queue_free()

@@ -159,6 +159,7 @@ func _start_wave() -> void:
 		if w >= 2 and r < 0.3: t = "runner"
 		if w >= 3 and r > 0.85: t = "exploder"
 		if w >= 4 and r > 0.95: t = "tank"
+		if w >= 4 and r >= 0.45 and r < 0.55: t = "charger"  # 第4波起10%：原属于normal的段位切给charger
 		# 在玩家周围8-15米随机生成
 		var angle: float = randf() * TAU
 		var dist: float = 8.0 + randf() * 7.0
