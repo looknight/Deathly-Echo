@@ -402,7 +402,6 @@ func _spawn_hole(pos: Vector3, is_blood: bool) -> void:
 	sphere.radius = 0.1
 	sphere.height = 0.2
 	hole.mesh = sphere
-	hole.global_position = pos
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	if is_blood:
@@ -415,6 +414,7 @@ func _spawn_hole(pos: Vector3, is_blood: bool) -> void:
 		mat.emission_enabled = false
 	hole.material_override = mat
 	get_tree().current_scene.add_child(hole)
+	hole.global_position = pos  # 必须先入树再设 global_position，否则不在树里时全局变换不可用
 	var tw := create_tween()
 	tw.tween_interval(2.0)
 	tw.tween_callback(hole.queue_free)
@@ -455,6 +455,9 @@ func _spawn_blood(pos: Vector3) -> void:
 
 func _spawn_flame() -> void:
 	# 枪口火光：橙色发光球，向前快速飞散后消失
+	# 切枪时旧枪管件会被 queue_free，残留帧仍可能调用到这里，先做有效性兜底
+	if not is_instance_valid(muzzle):
+		return
 	var origin: Vector3 = muzzle.global_position
 	for i in range(3):
 		var f: MeshInstance3D = MeshInstance3D.new()
