@@ -158,8 +158,10 @@ func _apply_body_visual(body_color: Color, eye_color: Color, body_emit: float, e
 		charger_glow_energy = glow_energy  # 记录基础值，冲刺翻倍时用
 
 func _apply_charger_visual() -> void:
-	# charger：亮橙身体 + 高自发光，眼睛白热
-	_apply_body_visual(Color(1.0, 0.45, 0.05), Color(1.0, 0.9, 0.7), 2.0, 4.0, 1.2, 3.0)
+	# charger：品红/洋红身体（远离 exploder 黄色色相），眼睛白热，高自发光
+	# 注意：_apply_body_visual() 会遍历到场景自带的 Body/Head，故传色必须让两者同色，
+	# 否则会出现「大盒子白热眼、小头身体色」的错位
+	_apply_body_visual(Color(0.95, 0.15, 0.7), Color(0.95, 0.15, 0.7), 2.5, 2.5, 1.2, 3.0)
 
 func _configure_type() -> void:
 	match zombie_type:
