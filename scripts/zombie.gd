@@ -16,6 +16,9 @@ var exploded: bool = false
 var boss_state: int = 0  # 0=正常 1=冲刺 2=召唤 3=咆哮
 var boss_skill_cd: float = 0.0
 var stun_timer: float = 0.0  # 眩晕倒计时
+# ===== 波次全局修饰（由 wave_manager 刷怪后套用）=====
+var wave_speed_mult: float = 1.0   # 冲刺速度也要乘，否则 charger 无视狂暴
+var wave_damage_mult: float = 1.0  # 近战与自爆伤害统一乘这个
 
 # ===== charger（冲刺型）参数：写死，不暴露为导出项 =====
 const CHARGER_NORMAL_SPEED: float = 2.5    # 常态移动速度
@@ -186,6 +189,15 @@ func _configure_type() -> void:
 			# BOSS红色发光更强
 	hp = max_hp
 
+func apply_wave_modifier(hp_mult: float, speed_mult: float, damage_mult: float) -> void:
+	# 波次修饰：在 _configure_type 的基线之上再乘，不改 match 里的原始数值
+	max_hp *= hp_mult
+	hp = max_hp
+	speed *= speed_mult
+	damage *= damage_mult
+	wave_speed_mult = speed_mult
+	wave_damage_mult = damage_mult
+
 func _physics_process(delta: float) -> void:
 	if not is_on_floor(): velocity.y -= gravity * delta
 	# 眩晕：减速停止
@@ -225,7 +237,7 @@ func _physics_process(delta: float) -> void:
 			boss_state = 0
 		# charger冲刺：每帧用最新玩家位置重算方向，所以是追踪而非直线
 		if zombie_type == "charger" and charging:
-			move_speed = CHARGER_CHARGE_SPEED
+			move_speed = CHARGER_CHARGE_SPEED * wave_speed_mult
 		velocity.x = dir.x * move_speed
 		velocity.z = dir.z * move_speed
 		look_at(Vector3(player.global_position.x, global_position.y, player.global_position.z), Vector3.UP)
@@ -309,7 +321,7 @@ func _explode() -> void:
 	if player and is_instance_valid(player) and player.get("marked_zombie") == self:
 		player.set("marked_zombie", null)
 	if player and global_position.distance_to(player.global_position) < 3.5:
-		player.take_damage(50.0)
+		player.take_damage(50.0 * wave_damage_mult)  # 自爆伤害同样吃波次修饰
 	var flash := OmniLight3D.new()
 	flash.light_color = Color(1,0.5,0.1)
 	flash.light_energy = 5.0
@@ -363,7 +375,7 @@ func _charger_explode(trigger_dist: float = -1.0) -> void:
 	# 伤害 80→20 线性衰减：80 - d*15（d≤4）
 	if in_radius and dmg_dist <= CHARGER_HARD_RADIUS and player.has_method("take_damage"):
 		var dmg: float = max(CHARGER_MAX_DMG - dmg_dist * CHARGER_DMG_FALLOFF, 20.0)
-		player.take_damage(dmg)
+		player.take_damage(dmg * wave_damage_mult)  # 冲刺自爆同样吃波次修饰
 	var flash := OmniLight3D.new()
 	flash.light_color = Color(1.0, 0.5, 0.1)
 	flash.light_energy = 8.0

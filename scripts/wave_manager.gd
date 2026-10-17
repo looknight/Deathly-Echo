@@ -9,6 +9,19 @@ var zombies_alive: int = 0
 var between_waves: bool = false
 var map_holder: Node3D
 
+# ===== 波次修饰表（全局）：按波次查表，缺省一律中性值 1.0 =====
+# count_mult 数量倍率 / hp_mult 血量倍率 / speed_mult 移动倍率 / damage_mult 伤害倍率
+const WAVE_MODS: Dictionary = {
+	3: {"name": "尸潮", "count_mult": 2.5, "hp_mult": 0.8, "speed_mult": 1.0, "damage_mult": 1.0},
+	9: {"name": "狂暴", "count_mult": 1.0, "hp_mult": 1.0, "speed_mult": 1.4, "damage_mult": 1.5},
+}
+# 当前波的修饰值：每波开头重算，_spawn_zombie 刷怪时套用
+var cur_mod_name: String = ""
+var cur_count_mult: float = 1.0
+var cur_hp_mult: float = 1.0
+var cur_speed_mult: float = 1.0
+var cur_damage_mult: float = 1.0
+
 # 8张地图配色: [地板色, 墙色, 雾色]
 var MAP_STYLES: Array = [
 	[Color(0.9,0.9,0.9), Color(0.5,0.5,0.5), Color(0.3,0.3,0.32)], # 街道
@@ -145,6 +158,8 @@ func _add_decoration(x: float, z: float, base_color: Color) -> void:
 func _start_wave() -> void:
 	GameState.wave += 1
 	var w: int = GameState.wave
+	# 先查当波修饰（放在 boss 分支之前，保证 boss 波也回填中性值，不残留上一波）
+	_apply_wave_mod(w)
 	if w == 5 or w == 10:
 		hud.show_center("WARNING: BOSS 出现", 3.0)
 		var boss: Node3D = _spawn_zombie("boss", Vector3(0, 0, -25))
@@ -152,7 +167,7 @@ func _start_wave() -> void:
 		for i in range(2):
 			_spawn_zombie("runner", Vector3(-15+i*30, 0, -25))
 		return
-	var count: int = 4 + w * 2
+	var count: int = int(round((4 + w * 2) * cur_count_mult))
 	for i in range(count):
 		var r: float = randf()
 		var t: String = "normal"
@@ -166,7 +181,19 @@ func _start_wave() -> void:
 		var ppos: Vector3 = player.global_position
 		var pos: Vector3 = Vector3(ppos.x + cos(angle)*dist, 1.0, ppos.z + sin(angle)*dist)
 		_spawn_zombie(t, pos)
-	hud.show_center("第 %d 波 · %d 只丧尸" % [w, count], 2.0)
+	if cur_mod_name == "":
+		hud.show_center("第 %d 波 · %d 只丧尸" % [w, count], 2.0)
+	else:
+		hud.show_center("第 %d 波 · %s · %d 只丧尸" % [w, cur_mod_name, count], 2.0)
+
+func _apply_wave_mod(w: int) -> void:
+	# 每波重算，查不到条目就回中性值，避免上一波修饰残留到下一波
+	var mod: Dictionary = WAVE_MODS.get(w, {})
+	cur_mod_name = str(mod.get("name", ""))
+	cur_count_mult = float(mod.get("count_mult", 1.0))
+	cur_hp_mult = float(mod.get("hp_mult", 1.0))
+	cur_speed_mult = float(mod.get("speed_mult", 1.0))
+	cur_damage_mult = float(mod.get("damage_mult", 1.0))
 
 func _spawn_zombie(t: String, pos: Vector3) -> Node3D:
 	var z: Node3D = zombie_scene.instantiate()
@@ -174,6 +201,9 @@ func _spawn_zombie(t: String, pos: Vector3) -> Node3D:
 	z.position = Vector3(pos.x, 1.0, pos.z)
 	z.tree_exited.connect(_on_zombie_died)
 	add_child(z)
+	# 进树之后套修饰：_ready → _configure_type 会重置 max_hp/hp/speed，必须先刷完基线再乘
+	if z.has_method("apply_wave_modifier"):
+		z.apply_wave_modifier(cur_hp_mult, cur_speed_mult, cur_damage_mult)
 	zombies_alive += 1
 	return z
 
