@@ -242,6 +242,8 @@ Built as a learning project with an AI-assisted workflow. The lessons that cost 
 
 Planned: data-driven weapon / upgrade / enemy definitions (`.tres`), enemy state machine, zombie mesh merging, navmesh baking.
 
+The phased engineering plan lives in [`docs/updates/`](docs/updates/) — phase A (shipping) is done; B–E cover data resources, HUD split, enemy state machine and rendering/localisation/tests.
+
 ---
 
 ## Credits
