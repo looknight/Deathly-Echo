@@ -5,3 +5,11 @@
 .appdata_test/
 test_*.gd
 test_*.tscn
+
+# 导出产物（构建生成，不入库）
+build/
+*.exe
+*.pck
+
+# 本地工作记录（AI 会话记忆、临时笔记），不属于游戏工程
+.workbuddy/

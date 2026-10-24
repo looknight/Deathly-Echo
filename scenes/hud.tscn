@@ -10,7 +10,7 @@ corner_radius_top_right = 6
 corner_radius_bottom_right = 6
 corner_radius_bottom_left = 6
 
-[node name="HUD" type="CanvasLayer"]
+[node name="HUD" type="CanvasLayer" groups=["hud"]]
 script = ExtResource("1_h")
 
 [node name="UI" type="Control" parent="."]

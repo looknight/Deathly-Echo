@@ -10,7 +10,8 @@ func _process(_delta: float) -> void:
 	queue_redraw()
 
 func _draw() -> void:
-	if player == null or not is_instance_valid(player): return
+	# player 可能已被释放，或其下没有 Head 子节点（换场景/复用节点时），取 rotation 前必须拦掉
+	if player == null or not is_instance_valid(player) or not player.has_node("Head"): return
 	var r := Rect2(Vector2.ZERO, size)
 	draw_rect(r, Color(0, 0, 0, 0.6), true)
 	draw_rect(r, Color(0.8, 0.8, 0.8, 0.5), false, 2.0)

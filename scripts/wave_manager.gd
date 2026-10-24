@@ -5,6 +5,12 @@ extends Node3D
 @export var player: CharacterBody3D
 @export var hud: CanvasLayer
 
+const BARREL_SCRIPT: Script = preload("res://scripts/barrel.gd")
+const SPIKE_SCRIPT: Script = preload("res://scripts/spike_trap.gd")
+const GAS_TANK_SCRIPT: Script = preload("res://scripts/gas_tank.gd")
+const ELITE_CHANCE: float = 0.20
+const ELITE_AFFIXES: Array[String] = ["frenzy", "split", "lifesteal"]
+
 var zombies_alive: int = 0
 var between_waves: bool = false
 var map_holder: Node3D
@@ -53,8 +59,18 @@ func _ready() -> void:
 	_build_map(0)
 	_start_wave()
 
+# 清理跨图残留：掉落物挂在 WaveManager 下、投掷物挂在 current_scene 下，都不受 map_holder
+# 的 queue_free 影响，不主动清就会跟着玩家进入下一张地图（悬在半空、堵路、白占内存）
+func _clear_transients() -> void:
+	for g in ["drop", "projectile"]:
+		for n in get_tree().get_nodes_in_group(g):
+			if is_instance_valid(n):
+				n.queue_free()
+
 func _build_map(map_idx: int) -> void:
 	for c in map_holder.get_children(): c.queue_free()
+	# 换图时一并清掉上一张图遗留的掉落物和飞行中的投掷物（它们并不在 map_holder 下）
+	_clear_transients()
 	var style: Array = MAP_STYLES[map_idx % MAP_STYLES.size()]
 	# 地面
 	var floor_mesh: MeshInstance3D = MeshInstance3D.new()
@@ -99,6 +115,21 @@ func _build_map(map_idx: int) -> void:
 	# 加装饰：路障/油桶
 	for i in range(6):
 		_add_decoration(randf_range(-30,30), randf_range(-30,30), style[1])
+	# 陷阱：每张图 2 个，地刺 / 毒气罐各 50%
+	# 网格与碰撞由脚本自建，这里只负责实例化 + 定位（都挂 map_holder，换图自动清）
+	for i in range(2):
+		var px: float = randf_range(-28.0, 28.0)
+		var pz: float = randf_range(-28.0, 28.0)
+		if randf() < 0.5:
+			var spike: Area3D = Area3D.new()
+			spike.set_script(SPIKE_SCRIPT)
+			spike.position = Vector3(px, 0.04, pz)
+			map_holder.add_child(spike)
+		else:
+			var tank: StaticBody3D = StaticBody3D.new()
+			tank.set_script(GAS_TANK_SCRIPT)
+			tank.position = Vector3(px, 0.6, pz)
+			map_holder.add_child(tank)
 
 func _add_boundary(x: float, z: float, sx: float, sz: float) -> void:
 	var b: StaticBody3D = StaticBody3D.new()
@@ -130,40 +161,121 @@ func _add_wall(x: float, z: float, wall_color: Color) -> void:
 	col.add_child(cs)
 	map_holder.add_child(col)
 
-func _add_decoration(x: float, z: float, base_color: Color) -> void:
-	# 油桶
-	var barrel: MeshInstance3D = MeshInstance3D.new()
+func _add_decoration(x: float, z: float, _base_color: Color) -> void:
+	# 油桶：StaticBody3D 挂 barrel.gd（血量/爆炸/连锁），网格与碰撞体作为其子节点
+	# 统一危险红，不再随地图墙色变化 —— 「红色桶=可爆炸」是玩家的既有认知，必须一眼可辨
+	var barrel: StaticBody3D = StaticBody3D.new()
+	barrel.set_script(BARREL_SCRIPT)
+	barrel.position = Vector3(x, 0.45, z)
+
+	# --- 桶身 ---
+	var mesh: MeshInstance3D = MeshInstance3D.new()
 	var cyl: CylinderMesh = CylinderMesh.new()
 	cyl.top_radius = 0.4
 	cyl.bottom_radius = 0.4
 	cyl.height = 0.9
-	barrel.mesh = cyl
-	barrel.position = Vector3(x, 0.45, z)
+	mesh.mesh = cyl
 	var mat: StandardMaterial3D = StandardMaterial3D.new()
-	mat.albedo_color = base_color.darkened(0.3)
-	mat.roughness = 0.6
-	mat.metallic = 0.3
-	barrel.material_override = mat
-	map_holder.add_child(barrel)
-	var col: StaticBody3D = StaticBody3D.new()
-	col.position = barrel.position
+	mat.albedo_color = Color(0.62, 0.09, 0.07)
+	mat.roughness = 0.55
+	mat.metallic = 0.35
+	mat.emission_enabled = true
+	mat.emission = Color(0.5, 0.05, 0.03)
+	mat.emission_energy_multiplier = 0.45  # 暗环境里自带一点红光，远处也能看出是爆炸物
+	mesh.material_override = mat
+	barrel.add_child(mesh)
+
+	# --- 顶盖：让轮廓多一层台阶，避免看起来像一根光秃秃的管子 ---
+	var cap: MeshInstance3D = MeshInstance3D.new()
+	var cap_cyl: CylinderMesh = CylinderMesh.new()
+	cap_cyl.top_radius = 0.42
+	cap_cyl.bottom_radius = 0.42
+	cap_cyl.height = 0.06
+	cap.mesh = cap_cyl
+	var cap_mat: StandardMaterial3D = StandardMaterial3D.new()
+	cap_mat.albedo_color = Color(0.35, 0.07, 0.05)
+	cap_mat.roughness = 0.6
+	cap_mat.metallic = 0.45
+	cap.material_override = cap_mat
+	cap.position = Vector3(0, 0.45, 0)
+	barrel.add_child(cap)
+
+	# --- 两道环箍：微凸于桶身，强化「铁桶」的工业感 ---
+	for i in range(2):
+		var hoop: MeshInstance3D = MeshInstance3D.new()
+		var hoop_cyl: CylinderMesh = CylinderMesh.new()
+		hoop_cyl.top_radius = 0.42
+		hoop_cyl.bottom_radius = 0.42
+		hoop_cyl.height = 0.07
+		hoop.mesh = hoop_cyl
+		var hoop_mat: StandardMaterial3D = StandardMaterial3D.new()
+		hoop_mat.albedo_color = Color(0.18, 0.05, 0.04)
+		hoop_mat.roughness = 0.7
+		hoop_mat.metallic = 0.5
+		hoop.material_override = hoop_mat
+		hoop.position = Vector3(0, 0.22 if i == 0 else -0.22, 0)
+		barrel.add_child(hoop)
+
+	# --- 中部警示带：黄色自发光，最容易在混战中抓住视线 ---
+	var band: MeshInstance3D = MeshInstance3D.new()
+	var band_cyl: CylinderMesh = CylinderMesh.new()
+	band_cyl.top_radius = 0.415
+	band_cyl.bottom_radius = 0.415
+	band_cyl.height = 0.16
+	band.mesh = band_cyl
+	var band_mat: StandardMaterial3D = StandardMaterial3D.new()
+	band_mat.albedo_color = Color(0.95, 0.72, 0.12)
+	band_mat.roughness = 0.5
+	band_mat.emission_enabled = true
+	band_mat.emission = Color(0.9, 0.6, 0.08)
+	band_mat.emission_energy_multiplier = 0.8
+	band.material_override = band_mat
+	barrel.add_child(band)
+
+	# --- 碰撞：与桶身同尺寸（0.4 / 0.9），子节点件不参与碰撞 ---
 	var cs: CollisionShape3D = CollisionShape3D.new()
 	var ss: CylinderShape3D = CylinderShape3D.new()
 	ss.radius = 0.4
 	ss.height = 0.9
 	cs.shape = ss
-	col.add_child(cs)
-	map_holder.add_child(col)
+	barrel.add_child(cs)
+	map_holder.add_child(barrel)
 
 func _start_wave() -> void:
 	GameState.wave += 1
 	var w: int = GameState.wave
+	# 每波开始先清空 BOSS 血条：否则上一张图的 BOSS 条会跟着进新地图
+	if hud and hud.has_method("clear_bosses"):
+		hud.clear_bosses()
 	# 先查当波修饰（放在 boss 分支之前，保证 boss 波也回填中性值，不残留上一波）
 	_apply_wave_mod(w)
-	if w == 5 or w == 10:
-		hud.show_center("WARNING: BOSS 出现", 3.0)
+	# 第一分钟：开局只提示一次按键，降低新玩家上手门槛
+	if w == 1 and hud and hud.has_method("show_hint"):
+		hud.show_hint("WASD 移动 · 左键射击 · R 换弹 · F 技能 · 右键开镜 · G 手雷 · Esc 暂停", 8.0)
+	if w % 5 == 0:
+		between_waves = false  # BOSS 波直接开打，别让清场判定停留在波间等待状态
+		# 无尽模式（>10 波）的每个 BOSS 波改成双 BOSS：一只冲锋型 + 一只吐酸型
+		var dual: bool = w > GameState.max_waves
+		var bosses: Array = []
 		var boss: Node3D = _spawn_zombie("boss", Vector3(0, 0, -25))
-		hud.set_boss(boss)
+		bosses.append(boss)
+		if dual:
+			# 变体必须在 _spawn_zombie 之后套（内部 reset_for_spawn 会清空 boss_variant）
+			if boss.has_method("apply_boss_variant"):
+				boss.call("apply_boss_variant", "charger")
+			var boss2: Node3D = _spawn_zombie("boss", Vector3(0, 0, -14))
+			if boss2.has_method("apply_boss_variant"):
+				boss2.call("apply_boss_variant", "spitter")
+			bosses.append(boss2)
+			hud.show_center("WARNING: 双 BOSS · 冲锋 + 吐酸", 3.5)
+		else:
+			hud.show_center("WARNING: BOSS 出现", 3.0)
+		# 传数组而不是单个引用：HUD 会为每个 BOSS 分配一条血条
+		if hud:
+			if hud.has_method("set_bosses"):
+				hud.set_bosses(bosses)
+			elif hud.has_method("set_boss"):
+				hud.set_boss(boss)
 		for i in range(2):
 			_spawn_zombie("runner", Vector3(-15+i*30, 0, -25))
 		return
@@ -173,6 +285,7 @@ func _start_wave() -> void:
 		var t: String = "normal"
 		if w >= 2 and r < 0.3: t = "runner"
 		if w >= 3 and r > 0.85: t = "exploder"
+		if w >= 3 and r >= 0.35 and r < 0.45: t = "spitter"  # 第3波起10%：占用 0.35~0.45 空档
 		if w >= 4 and r > 0.95: t = "tank"
 		if w >= 4 and r >= 0.45 and r < 0.55: t = "charger"  # 第4波起10%：原属于normal的段位切给charger
 		# 在玩家周围8-15米随机生成
@@ -182,7 +295,10 @@ func _start_wave() -> void:
 		var pos: Vector3 = Vector3(ppos.x + cos(angle)*dist, 1.0, ppos.z + sin(angle)*dist)
 		_spawn_zombie(t, pos)
 	if cur_mod_name == "":
-		hud.show_center("第 %d 波 · %d 只丧尸" % [w, count], 2.0)
+		if w > GameState.max_waves:
+			hud.show_center("无尽模式 · 第 %d 波 · %d 只丧尸" % [w, count], 2.5)
+		else:
+			hud.show_center("第 %d 波 · %d 只丧尸" % [w, count], 2.0)
 	else:
 		hud.show_center("第 %d 波 · %s · %d 只丧尸" % [w, cur_mod_name, count], 2.0)
 
@@ -194,14 +310,29 @@ func _apply_wave_mod(w: int) -> void:
 	cur_hp_mult = float(mod.get("hp_mult", 1.0))
 	cur_speed_mult = float(mod.get("speed_mult", 1.0))
 	cur_damage_mult = float(mod.get("damage_mult", 1.0))
+	# 无尽模式：第 11 波起，血量与伤害按 1.10^(w-10) 指数增长
+	# （原为 1.15，第 20 波约 ×4 过陡；1.10 下第 20 波约 ×2.6，第 30 波约 ×6.7）
+	if w > GameState.max_waves:
+		var g: float = pow(1.10, float(w - GameState.max_waves))
+		cur_hp_mult *= g
+		cur_damage_mult *= g
 
-func _spawn_zombie(t: String, pos: Vector3) -> Node3D:
-	var z: Node3D = zombie_scene.instantiate()
+func _spawn_zombie(t: String, pos: Vector3, allow_elite: bool = true) -> Node3D:
+	# 从对象池取（池空时内部自动实例化，并直接挂到本节点下，不搬家）
+	var z: Node3D = ObjectPool.spawn(zombie_scene, self) as Node3D
 	z.set("zombie_type", t)
 	z.position = Vector3(pos.x, 1.0, pos.z)
-	z.tree_exited.connect(_on_zombie_died)
-	add_child(z)
-	# 进树之后套修饰：_ready → _configure_type 会重置 max_hp/hp/speed，必须先刷完基线再乘
+	# 复用实例必须按新类型重算属性与外观，并复位全部状态
+	if z.has_method("reset_for_spawn"):
+		z.reset_for_spawn()
+	# 精英判定：第 4 波起 20%，BOSS 与分裂出的子代不参与
+	if allow_elite and t != "boss" and GameState.wave >= 4 and randf() < ELITE_CHANCE:
+		if z.has_method("make_elite"):
+			z.make_elite(ELITE_AFFIXES.pick_random())
+	# 死亡信号只连一次（池化后同一个实例会被反复使用）
+	if not z.is_connected("died", _on_zombie_died):
+		z.connect("died", _on_zombie_died)
+	# 进树之后套修饰：_configure_type 会重置 max_hp/hp/speed，必须先刷完基线再乘
 	if z.has_method("apply_wave_modifier"):
 		z.apply_wave_modifier(cur_hp_mult, cur_speed_mult, cur_damage_mult)
 	zombies_alive += 1
@@ -213,15 +344,47 @@ func _on_zombie_died() -> void:
 		hud.show_center("%d 连杀!" % GameState.combo, 1.5)
 	if zombies_alive <= 0 and not between_waves:
 		between_waves = true
-		if GameState.wave >= GameState.max_waves:
-			GameState.game_won = true
-			hud.show_center("通关！你活下来了", 5.0)
-			return
+		# 清场即收起 BOSS 血条（此时 BOSS 已死，但引用还留在数组里）
+		if hud and hud.has_method("clear_bosses"):
+			hud.clear_bosses()
+		# 无尽模式：打完第 10 波不再结算通关，直接继续下一波
+		if GameState.wave == GameState.max_waves:
+			hud.show_center("进入无尽模式！波次与强度将持续攀升", 3.5)
 		# 生成传送门，玩家走进去进下一关
 		_spawn_portal()
 		hud.show_center("清场完成！走进绿色传送门", 3.0)
+		_offer_upgrades()
 
 var portal: Area3D = null
+
+# ===== 波间三选一强化 =====
+func _offer_upgrades() -> void:
+	if hud == null or not hud.has_method("show_upgrades"):
+		return
+	# 从升级池随机抽 3 个不重复的
+	var pool: Array = GameState.UPGRADE_POOL.duplicate()
+	pool.shuffle()
+	var picks: Array = []
+	for i in range(min(3, pool.size())):
+		picks.append(pool[i])
+	hud.show_upgrades(picks)
+
+# ===== 调试：清场并直接跳到下一个 BOSS 波（5 / 10）=====
+func debug_jump_to_boss() -> void:
+	for z in get_tree().get_nodes_in_group("zombie"):
+		if is_instance_valid(z):
+			# 回池而不是销毁：不结算击杀/掉落，也不触发 died 信号
+			if z.has_method("force_recycle"):
+				z.force_recycle()
+			else:
+				z.queue_free()
+	zombies_alive = 0
+	if portal:
+		portal.queue_free()
+		portal = null
+	between_waves = false
+	GameState.wave = 4 if GameState.wave < 5 else 9
+	_start_wave()
 
 func _spawn_portal() -> void:
 	if portal: portal.queue_free()
@@ -257,6 +420,7 @@ func _spawn_portal() -> void:
 func _on_portal_enter(body: Node3D) -> void:
 	if body == player:
 		if portal: portal.queue_free()
+		portal = null  # 立即置空，避免下一波 _spawn_portal 时持有已释放节点的悬空引用
 		GameState.map_index = (GameState.map_index + 1) % 8
 		_build_map(GameState.map_index)
 		player.global_position = Vector3(0, 1.0, 20)

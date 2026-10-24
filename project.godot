@@ -11,12 +11,15 @@ config_version=5
 [application]
 
 config/name="Zombie FPS"
+config/version="0.9.0"
 run/main_scene="res://scenes/menu.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 
 [autoload]
 
 GameState="*res://scripts/game_state.gd"
+ObjectPool="*res://scripts/object_pool.gd"
+AudioManager="*res://scripts/audio_manager.gd"
 
 [display]
 
@@ -73,4 +76,10 @@ grenade={
 
 [rendering]
 
+; MX550 4GB 定向设置：
+; msaa_3d=1 → MSAA 2x（1=2x, 2=4x, 3=8x），边缘够用又不吃太多带宽
+; scaling_3d/scale=0.85 → 3D 以 85% 分辨率渲染再上采样，省 fill rate；UI 仍按原生分辨率绘制
+anti_aliasing/quality/msaa_3d=1
+scaling_3d/mode=0
+scaling_3d/scale=0.85
 /environment/defaults/default_clear_color=Color(0.08, 0.08, 0.1, 1)
