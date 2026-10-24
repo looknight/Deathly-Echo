@@ -37,6 +37,7 @@ Godot_v4.7.1-stable_win64.exe --path ./
 | Shift | Sprint (×1.8) |
 | Esc | Toggle pause (dedicated pause panel) / Return to menu when dead |
 | B | Debug: jump straight to the next BOSS wave |
+| F3 | Debug overlay: FPS / wave / enemy count / draw calls / objects / VRAM |
 | Click screen | Re-lock mouse |
 
 **Pause panel settings**: `↑` `↓` to select a row, `←` `→` to adjust — master volume, mouse sensitivity, crosshair colour (white / green / red). All persist to disk.
