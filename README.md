@@ -240,9 +240,11 @@ Built as a learning project with an AI-assisted workflow. The lessons that cost 
 - No automated tests or CI
 - Single-player only; no multiplayer, no Steam integration
 
-Planned: data-driven weapon / upgrade / enemy definitions (`.tres`), enemy state machine, zombie mesh merging, navmesh baking.
+Weapon stats are now data-driven — each gun is a `WeaponData` resource in `resources/weapons/*.tres`, with the old table kept as a fallback so a missing or malformed `.tres` degrades to the built-in values instead of breaking the game. Upgrades and enemies are still in code (phase B3/B4).
 
-The phased engineering plan lives in [`docs/updates/`](docs/updates/) — phase A (shipping) is done; B–E cover data resources, HUD split, enemy state machine and rendering/localisation/tests.
+Planned: upgrade / enemy definitions as resources, enemy state machine, zombie mesh merging, navmesh baking.
+
+The phased engineering plan lives in [`docs/updates/`](docs/updates/) — phase A (shipping) is done; B is in progress; C–E cover HUD split, enemy state machine and rendering/localisation/tests.
 
 ---
 

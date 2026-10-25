@@ -1,6 +1,21 @@
 # 阶段 B · 配置数据资源化
 
-**状态：⬜ 未开始** · 预计成本 1~2 天 · 风险 低
+**状态：🚧 进行中**（B1 资源类型、B2 武器迁移已完成）· 剩余 B3 卡牌 / B4 敌人与地图
+
+## 进度
+
+- [x] **B1** 定义 `WeaponData`（`scripts/data/weapon_data.gd`）
+- [x] **B2** 5 把武器的 `.tres`（`resources/weapons/`），`player.gd` 改为读资源，内置字典降级为兜底
+- [ ] B3 15 张卡牌迁 `UpgradeData`（改「效果枚举 + 参数」驱动）
+- [ ] B4 敌人与地图配置迁移
+- [ ] 消除 `ELITE_AFFIXES` 的重复定义
+
+**B2 的落地方式**（可作为后续步骤的模板）：
+
+1. `player.gd` 保留 `const FALLBACK_WEAPONS`（原字典改名），保证资源缺失时行为不变
+2. `_load_weapon_table()` 先用 `duplicate(true)` 铺满兜底，再用资源逐项覆盖
+3. 每个 `.tres` 加载后校验三件事：文件存在、类型是 `WeaponData`、`id` 与文件名一致；任一不符只回退这一把枪并 `push_warning`
+4. `WEAPONS` 由 `const` 变 `var`，但**键名完全不变**（`name/dmg/mag/res/rate/spread/pellets/auto`），因此所有调用点零改动
 
 ---
 

@@ -1,0 +1,15 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/weapon_data.gd" id="1_weapon"]
+
+[resource]
+script = ExtResource("1_weapon")
+id = "shotgun"
+display_name = "霰弹枪"
+damage = 15.0
+mag_size = 6
+reserve = 36
+fire_interval = 0.75
+spread = 0.18
+pellets = 6
+automatic = false

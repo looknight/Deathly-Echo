@@ -1,0 +1,15 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/weapon_data.gd" id="1_weapon"]
+
+[resource]
+script = ExtResource("1_weapon")
+id = "launcher"
+display_name = "榴弹枪"
+damage = 150.0
+mag_size = 3
+reserve = 12
+fire_interval = 0.8
+spread = 0.01
+pellets = 1
+automatic = false

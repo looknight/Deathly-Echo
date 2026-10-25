@@ -1,13 +1,21 @@
 extends CharacterBody3D
 ## FPS 玩家：多武器、手雷、道具、角色系统
 
-const WEAPONS := {
+## 武器数值来源：resources/weapons/*.tres（WeaponData 资源，见 scripts/data/weapon_data.gd）
+## 下表仅作兜底：资源缺失、类型不符或 id 对不上时按原值运行，保证一把枪的配置坏掉不会导致游戏起不来
+const FALLBACK_WEAPONS := {
 	"pistol":   {"name":"手枪","dmg":60,"mag":12,"res":48,"rate":0.32,"spread":0.02,"pellets":1,"auto":false},
 	"smg":      {"name":"冲锋枪","dmg":25,"mag":32,"res":120,"rate":0.10,"spread":0.07,"pellets":1,"auto":true},
 	"shotgun":  {"name":"霰弹枪","dmg":15,"mag":6,"res":36,"rate":0.75,"spread":0.18,"pellets":6,"auto":false},
 	"sniper":   {"name":"狙击枪","dmg":200,"mag":5,"res":25,"rate":1.2,"spread":0.001,"pellets":1,"auto":false},
 	"launcher": {"name":"榴弹枪","dmg":150,"mag":3,"res":12,"rate":0.8,"spread":0.01,"pellets":1,"auto":false},
 }
+const WEAPON_DIR: String = "res://resources/weapons/"
+const WEAPON_IDS: Array = ["pistol", "smg", "shotgun", "sniper", "launcher"]
+
+# 运行时由 _load_weapon_table() 填充。
+# 键名与旧字典完全一致（name/dmg/mag/res/rate/spread/pellets/auto），所有调用点无需改动。
+var WEAPONS: Dictionary = {}
 # 每个角色可用武器
 var CLASS_WEAPONS := {
 	"assault": ["pistol","smg","shotgun"],
@@ -109,7 +117,37 @@ func _hud() -> Node:
 		hud_node = get_tree().get_first_node_in_group("hud")
 	return hud_node
 
+# 先铺满兜底表，再用资源逐项覆盖：
+# 任何一个 .tres 缺失/损坏/写错 id，只会让那一把枪退回内置数值，不影响其它武器与整局游戏
+func _load_weapon_table() -> void:
+	WEAPONS = FALLBACK_WEAPONS.duplicate(true)
+	for id in WEAPON_IDS:
+		var key: String = str(id)
+		var path: String = WEAPON_DIR + key + ".tres"
+		if not ResourceLoader.exists(path):
+			push_warning("武器资源不存在，使用兜底数值：%s" % path)
+			continue
+		var data: WeaponData = load(path) as WeaponData
+		if data == null:
+			push_warning("武器资源类型不符（应为 WeaponData）：%s" % path)
+			continue
+		if data.id != key:
+			push_warning("武器资源 id 与文件名不一致：%s（id=%s）" % [path, data.id])
+			continue
+		WEAPONS[key] = {
+			"name": data.display_name,
+			"dmg": data.damage,
+			"mag": data.mag_size,
+			"res": data.reserve,
+			"rate": data.fire_interval,
+			"spread": data.spread,
+			"pellets": data.pellets,
+			"auto": data.automatic,
+		}
+
 func _ready() -> void:
+	# 武器数值必须在任何装备/射击之前就绪（EquipWeapon 会读 mag_capacity）
+	_load_weapon_table()
 	# 暂停时仍需处理 Esc（恢复）与 B（跳 BOSS），因此节点设为 ALWAYS；
 	# 玩法逻辑在 _physics_process / _input 里显式拦掉（见下方 paused 判断）
 	process_mode = Node.PROCESS_MODE_ALWAYS

@@ -1,0 +1,15 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/data/weapon_data.gd" id="1_weapon"]
+
+[resource]
+script = ExtResource("1_weapon")
+id = "sniper"
+display_name = "狙击枪"
+damage = 200.0
+mag_size = 5
+reserve = 25
+fire_interval = 1.2
+spread = 0.001
+pellets = 1
+automatic = false
